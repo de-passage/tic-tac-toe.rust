@@ -73,12 +73,13 @@ impl Board {
         (self.0).len()
     }
 
-    fn play(&mut self, player: PlayerID, pos: usize) -> Result<(), String> {
+    fn play(&mut self, player: &Player) -> Result<(), String> {
+		let pos = player.play(self);
         assert!(pos < 9);
-        assert!(player == 1 || player == 2);
+        assert!(player.id() == 1 || player.id() == 2);
 
         if self[pos] == 0 {
-            self[pos] = player;
+            self[pos] = player.id();
             Ok(())
         } else {
             Err(format!("Position already occupied by player {}", self[pos]))
@@ -113,12 +114,28 @@ impl IndexMut<usize> for Board {
     }
 }
 
+struct Dummy {
+	id: PlayerID,
+	play: usize,
+}
+
+impl Player for Dummy {
+	fn id(&self) -> PlayerID {
+		self.id
+	}
+
+	fn play(&self, board: &Board) -> usize {
+		self.play
+	}
+}
+
 #[test]
 fn test_can_place_on_empty_spot() {
     let mut b = Board::new();
 
     for i in 0..9 {
-        match b.play(i % 2 + 1, i as usize) {
+		let p = Dummy{ id: i % 2 + 1, play:  i as usize };
+        match b.play(&p) {
             Err(string) => assert!(false, string),
             _ => (),
         }
@@ -134,7 +151,8 @@ fn test_cannot_place_on_taken_spot() {
     let mut b = Board(vec![1, 1, 1, 2, 1, 1, 2, 1, 1]);
 
     for i in 0..9 {
-        match b.play(1, i) {
+		let p = Dummy { id: 1, play: i };
+        match b.play(&p) {
             Ok(()) => assert!(false, "Should have failed"),
             _ => (),
         }
@@ -148,58 +166,20 @@ fn test_none_empty() {
 }
 
 fn process_player_turn(
-    id: PlayerID,
     board: &mut Board,
-    input_function: &(Fn(&Board, PlayerID) -> usize),
+    player: &Player,
 ) {
-    while let Err(str) = board.play(id, input_function(board, id)) {
+    while let Err(str) = board.play(player) {
         println!("Error: {}", str);
-    }
-}
-
-use std::str::FromStr;
-
-fn get_player_input(_: &Board, id: PlayerID) -> usize {
-
-	let between = |x, a, b| { x >= a && x <= b };
-    loop {
-        let mut input = String::new();
-
-		println!("Please choose a move for player {} (single digit from 1 to 9 or two comma-separated digits from 1 to 3):", id);
-        std::io::stdin().read_line(&mut input).unwrap();
-
-        let substrings: Vec<&str> = input.split(',').collect();
-
-		match substrings.len() {
-			1 => {
-				let pos = usize::from_str(&substrings[0].trim());
-
-				match pos {
-					Ok(val) if between(val, 1, 9) => return val - 1,
-					_ => continue,
-				}
-			},
-			2 => {
-				let x = usize::from_str(&substrings[0].trim());
-				let y = usize::from_str(&substrings[1].trim());
-
-				match (x, y) {
-					(Ok(a), Ok(b)) if between(a, 1, 3) && between(b, 1, 3) => return (a - 1) * 3 + b - 1,
-					_ => continue,
-				}
-			}
-			_ => continue,
-		}
-
     }
 }
 
 fn has_won(board: &Board, id: PlayerID) -> bool {
 
-	let cell_value = |(row, col)| { if board[(col, row)] == id { 1 } else { 0 } };
+	let cell_value = |(row, col)| { if board[(row, col)] == id { 1 } else { 0 } };
 
-	let row = |c1, c2| { (c2, c1) };
-	let column = |c1, c2| { (c1, c2) };
+	let row = |c1, c2| { (c1, c2) };
+	let column = |c1, c2| { (c2, c1) };
 	let diag1 = |_, c2| { (c2, c2) };
 	let diag2 = |_, c2| { (2 - c2, c2) };
 
@@ -269,13 +249,94 @@ fn run_game_loop(board: &mut Board, players: &(char, char)) -> GameStatus {
 		match check_win_condition(board, current_player) {
 			GameStatus::InProgress => {
 				current_player = if current_player == 1 { 2 } else { 1 };
-				process_player_turn(current_player, board, &get_player_input);
+				process_player_turn(board, &Human(current_player));
 				print_board(board, players);
 			},
 			val @ _ => return val,
 		}
 	}
 }
+
+////////////////
+// User input //
+////////////////
+
+trait Player {
+
+	fn id(&self) -> PlayerID;
+
+	fn play(&self, board: &Board) -> usize;
+}
+
+use std::str::FromStr;
+
+struct Human(PlayerID);
+
+impl Player for Human {
+	fn play(&self, _: &Board) -> usize {
+
+		let between = |x, a, b| { x >= a && x <= b };
+		loop {
+			let mut input = String::new();
+
+			println!("Please choose a move for player {} (single digit from 1 to 9 or two comma-separated digits from 1 to 3):", self.id());
+			std::io::stdin().read_line(&mut input).unwrap();
+
+			let substrings: Vec<&str> = input.split(',').collect();
+
+			match substrings.len() {
+				1 => {
+					let pos = usize::from_str(&substrings[0].trim());
+
+					match pos {
+						Ok(val) if between(val, 1, 9) => return val - 1,
+							_ => continue,
+					}
+				},
+				  2 => {
+					  let x = usize::from_str(&substrings[0].trim());
+					  let y = usize::from_str(&substrings[1].trim());
+
+					  match (x, y) {
+						  (Ok(a), Ok(b)) if between(a, 1, 3) && between(b, 1, 3) => return (a - 1) * 3 + b - 1,
+							  _ => continue,
+					  }
+				  }
+				_ => continue,
+			}
+		}
+	}
+
+	fn id(&self) -> PlayerID {
+		self.0
+	}
+}
+
+////////
+// AI //
+////////
+
+struct Computer(PlayerID);
+
+impl Player for Computer {
+	fn id(&self) -> PlayerID {
+		self.0
+	}
+
+	fn play(&self, board: &Board) -> usize {
+		0
+	}
+}
+
+#[test]
+fn ai_should_never_lose() {
+	let b = Board(vec![1, 2, 2, 2, 1, 0, 1, 1, 0]);
+	assert_eq!(Computer(2).play(&b), 8);
+}
+
+//////////
+// Main //
+//////////
 
 fn main() {
     let players = ('O', 'X');
