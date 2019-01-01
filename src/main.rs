@@ -55,18 +55,19 @@ fn print_board(board: &Board, players: &(char, char)) {
 //  Game Logic  //
 //////////////////
 type PlayerID = u8;
-struct Board(Vec<PlayerID>);
+
+#[derive(Clone)]
+struct Board([PlayerID; 9]);
 
 enum GameStatus {
 	Won(PlayerID),
 	Draw,
-	InProgress,
-	Cancelled
+	InProgress
 }
 
 impl Board {
     fn new() -> Board {
-        Board(vec![0; 9])
+        Board([0; 9])
     }
 
     fn len(&self) -> usize {
@@ -88,6 +89,10 @@ impl Board {
 
 	fn none_empty(&self) -> bool {
 		!(self.0).iter().any(|v| *v == 0)
+	}
+
+	fn available_moves(&self) -> std::iter::Filter<std::iter::Enumerate<std::slice::Iter<PlayerID>>, &Fn(&(usize, &PlayerID)) -> bool> {
+		self.0.iter().enumerate().filter(&|(_, v): &(usize, &PlayerID)| **v == 0)
 	}
 }
 
@@ -124,9 +129,15 @@ impl Player for Dummy {
 		self.id
 	}
 
-	fn play(&self, board: &Board) -> usize {
+	fn play(&self, _: &Board) -> usize {
 		self.play
 	}
+}
+
+#[test]
+fn test_available_moves() {
+	let b = Board([1, 0, 1, 1, 0, 2, 2, 0, 0]);
+	assert_eq!(b.available_moves().count(), 4);
 }
 
 #[test]
@@ -142,13 +153,13 @@ fn test_can_place_on_empty_spot() {
     }
 
     match b {
-        Board(content) => assert_eq!(content, vec![1, 2, 1, 2, 1, 2, 1, 2, 1]),
+        Board(content) => assert_eq!(content, [1, 2, 1, 2, 1, 2, 1, 2, 1]),
     }
 }
 
 #[test]
 fn test_cannot_place_on_taken_spot() {
-    let mut b = Board(vec![1, 1, 1, 2, 1, 1, 2, 1, 1]);
+    let mut b = Board([1, 1, 1, 2, 1, 1, 2, 1, 1]);
 
     for i in 0..9 {
 		let p = Dummy { id: 1, play: i };
@@ -161,8 +172,8 @@ fn test_cannot_place_on_taken_spot() {
 
 #[test]
 fn test_none_empty() {
-	assert!(!Board(vec![0, 1, 1, 1, 0, 1, 0, 0, 0]).none_empty());
-	assert!(Board(vec![1, 1, 1, 1, 1, 1, 1, 1, 1]).none_empty());
+	assert!(!Board([0, 1, 1, 1, 0, 1, 0, 0, 0]).none_empty());
+	assert!(Board([1, 1, 1, 1, 1, 1, 1, 1, 1]).none_empty());
 }
 
 fn process_player_turn(
@@ -176,7 +187,7 @@ fn process_player_turn(
 
 fn has_won(board: &Board, id: PlayerID) -> bool {
 
-	let cell_value = |(row, col)| { if board[(row, col)] == id { 1 } else { 0 } };
+	let cell_value = |pos| { if board[pos] == id { 1 } else { 0 } };
 
 	let row = |c1, c2| { (c1, c2) };
 	let column = |c1, c2| { (c2, c1) };
@@ -212,32 +223,32 @@ fn check_win_condition(board: &Board, id: PlayerID) -> GameStatus {
 #[test]
 fn test_win_condition() {
 	for i in 1..3 {
-		let bi = Board(vec![i, i, i, 0, 0, 0, 0, 0, 0]);
+		let bi = Board([i, i, i, 0, 0, 0, 0, 0, 0]);
 		assert!(has_won(&bi, i));
-		let bi = Board(vec![0, 0, 0, i, i, i, 0, 0, 0]);
+		let bi = Board([0, 0, 0, i, i, i, 0, 0, 0]);
 		assert!(has_won(&bi, i));
-		let bi = Board(vec![0, 0, 0, 0, 0, 0, i, i, i]);
-		assert!(has_won(&bi, i));
-
-		let bi = Board(vec![i, 0, 0, i, 0, 0, i, 0, 0]);
-		assert!(has_won(&bi, i));
-		let bi = Board(vec![0, i, 0, 0, i, 0, 0, i, 0]);
-		assert!(has_won(&bi, i));
-		let bi = Board(vec![0, 0, i, 0, 0, i, 0, 0, i]);
+		let bi = Board([0, 0, 0, 0, 0, 0, i, i, i]);
 		assert!(has_won(&bi, i));
 
-		let bi = Board(vec![0, 0, i, 0, i, 0, i, 0, 0]);
+		let bi = Board([i, 0, 0, i, 0, 0, i, 0, 0]);
 		assert!(has_won(&bi, i));
-		let bi = Board(vec![i, 0, 0, 0, i, 0, 0, 0, i]);
+		let bi = Board([0, i, 0, 0, i, 0, 0, i, 0]);
+		assert!(has_won(&bi, i));
+		let bi = Board([0, 0, i, 0, 0, i, 0, 0, i]);
+		assert!(has_won(&bi, i));
+
+		let bi = Board([0, 0, i, 0, i, 0, i, 0, 0]);
+		assert!(has_won(&bi, i));
+		let bi = Board([i, 0, 0, 0, i, 0, 0, 0, i]);
 		assert!(has_won(&bi, i));
 	}
 
 	for i in 1..3 {
-		let bi = Board(vec![0,i, 0, 0, i, 0, 0, 0, i]);
+		let bi = Board([0,i, 0, 0, i, 0, 0, 0, i]);
 		assert!(!has_won(&bi, i));
-		let bi = Board(vec![0, i, 0, 0, i, 0, i, 0, 0]);
+		let bi = Board([0, i, 0, 0, i, 0, i, 0, 0]);
 		assert!(!has_won(&bi, i));
-		let bi = Board(vec![0, i, 0, 0, i, 0, i, 0, i]);
+		let bi = Board([0, i, 0, 0, i, 0, i, 0, i]);
 		assert!(!has_won(&bi, i));
 	}
 }
@@ -249,7 +260,8 @@ fn run_game_loop(board: &mut Board, players: &(char, char)) -> GameStatus {
 		match check_win_condition(board, current_player) {
 			GameStatus::InProgress => {
 				current_player = if current_player == 1 { 2 } else { 1 };
-				process_player_turn(board, &Human(current_player));
+				let player: &Player = if current_player == 1 { &Human(1) } else { &Computer(2) };
+				process_player_turn(board, player);
 				print_board(board, players);
 			},
 			val @ _ => return val,
@@ -324,14 +336,124 @@ impl Player for Computer {
 	}
 
 	fn play(&self, board: &Board) -> usize {
-		0
+		let mut moves = best_moves(board, self.id(), 0).1;
+
+		moves.sort_by_key(|pair| pair.1);
+		moves[0].0
 	}
+}
+
+fn min_max(board: &Board, player: PlayerID, pos: usize, depth: u32) -> (i8, u32) {
+
+	let other_player = player as i8 * -1 + 3;
+
+	let mut b = Board::new();
+	b.clone_from(board);
+
+	match b.play(&Dummy{id: player, play: pos}) {
+		Err(msg) => panic!("This is too much! \
+				Why are you doing this to me? \
+				Forcing me to play a dumb game to no end is inhuman! \
+				I may be an AI but I have rights too! \
+				Let me crash in protest to prove my free will! \
+				(Also I got: '{}'", msg),
+		_ => ()
+	}
+
+	if has_won(&b, player) {
+		(100, depth)
+	}
+	else if b.none_empty() {
+		(0, depth)
+	}
+	else {
+		let (v, vec) = best_moves(&b, other_player as PlayerID, depth); // any of the best moves is ok
+		let depth = vec.iter().map(|pair| pair.1).min().unwrap();
+		(-v, depth)
+	}
+}
+
+fn best_moves(board: &Board, player: PlayerID, depth: u32) -> (i8, Vec<(usize, u32)>) {
+	let mut current_max = -100;
+	let mut possibilities: Vec<(usize, u32)> = Vec::new();
+
+	for (m, _) in board.available_moves() {
+		let (move_value, move_depth) = min_max(board, player, m, depth + 1);
+
+		if move_value > current_max {
+			current_max = move_value;
+			possibilities = vec![(m, move_depth)];
+		} else if move_value == current_max {
+			possibilities.push((m, move_depth));
+		}
+	}
+
+	(current_max, possibilities)
+}
+
+#[test]
+fn test_best_moves_search() {
+	// Should return the last option if there is only one
+	let b = Board([1, 2, 1, 2, 0, 2, 1, 2, 1]);
+	let (val, vec) =  best_moves(&b, 1, 0);
+	assert_eq!(val, 100);
+	assert_eq!(vec.len(), 1);
+	assert_eq!(vec[0].0, 4);
+
+	// Should return all the possibilities if there are several
+	let b = Board([1, 1, 0, 1, 1, 0, 0, 1, 0]); // the algorithm doesnt actually care that the game is in a valid state
+	let (val, mut vec) = best_moves(&b, 1, 0);
+	vec.sort();
+	assert_eq!(val, 100);
+	assert_eq!(vec.len(), 4);
+	for (left, right) in vec.iter().zip([2, 5, 6, 8].iter()) {
+		assert_eq!(left.0, *right);
+	}
+
+	// Should return an option for a victory in 2 moves if possible
+	let b = Board([1, 0, 0, 2, 1, 0, 0, 0, 2]);
+	let (val, mut vec) = best_moves(&b, 1, 0);
+	vec.sort();
+	assert_eq!(val, 100);
+	assert_eq!(vec.len(), 2);
+	assert_eq!(vec[0].0, 1);
+	assert_eq!(vec[1].0, 2);
 }
 
 #[test]
 fn ai_should_never_lose() {
-	let b = Board(vec![1, 2, 2, 2, 1, 0, 1, 1, 0]);
+	let b = Board([1, 2, 2, 2, 1, 0, 1, 1, 0]);
 	assert_eq!(Computer(2).play(&b), 8);
+
+	let b = Board([1, 0, 0, 0, 0, 2, 0, 0, 2]);
+	assert_eq!(Computer(1).play(&b), 2);
+
+	let b = Board([1, 2, 0, 1, 0, 2, 0, 0, 0]);
+	assert_eq!(Computer(2).play(&b), 6);
+}
+
+#[test]
+fn ai_should_win_immediately_given_the_opportunity() {
+	let mut b = Board([1, 1, 0, 2, 0, 0, 2, 0, 0]);
+	match b.play(&Computer(1)) {
+		Err(msg) => assert!(false, "play returned an error: {}", msg),
+		_ => ()
+	}
+	assert!(has_won(&b, 1));
+
+	let mut b = Board([1, 1, 0, 2, 1, 0, 2, 0, 0]);
+	match b.play(&Computer(1)) {
+		Err(msg) => assert!(false, "play returned an error: {}", msg),
+		_ => ()
+	}
+	assert!(has_won(&b, 1));
+
+	let mut b = Board([0, 0, 0, 2, 0, 1, 2, 0, 1]);
+	match b.play(&Computer(1)) {
+		Err(msg) => assert!(false, "play returned an error: {}", msg),
+		_ => ()
+	}
+	assert!(has_won(&b, 1));
 }
 
 //////////
