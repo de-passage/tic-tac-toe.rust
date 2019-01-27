@@ -1,7 +1,7 @@
 //////////////////
 //  Game Logic  //
 //////////////////
-mod game_logic {
+pub mod game_logic {
 
 use std::ops::{Index, IndexMut};
 
@@ -16,7 +16,7 @@ pub enum GameStatus {
 	InProgress
 }
 
-trait Player {
+pub trait Player {
 
 	fn id(&self) -> PlayerID;
 
@@ -76,8 +76,8 @@ impl IndexMut<usize> for Board {
 }
 
 pub struct Dummy {
-	id: PlayerID,
-	play: usize,
+	pub id: PlayerID,
+	pub play: usize,
 }
 
 impl Player for Dummy {
@@ -206,22 +206,6 @@ fn test_win_condition() {
 		assert!(!has_won(&bi, i));
 		let bi = Board([0, i, 0, 0, i, 0, i, 0, i]);
 		assert!(!has_won(&bi, i));
-	}
-}
-
-pub fn run_game_loop(board: &mut Board, players: &(char, char)) -> GameStatus {
-	let mut current_player: PlayerID = 2;
-
-	loop {
-		match check_win_condition(board, current_player) {
-			GameStatus::InProgress => {
-				current_player = if current_player == 1 { 2 } else { 1 };
-				let player: &Player = if current_player == 1 { &Human(1) } else { &Computer(2) };
-				process_player_turn(board, player);
-				print_board(board, players);
-			},
-			val @ _ => return val,
-		}
 	}
 }
 

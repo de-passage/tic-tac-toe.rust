@@ -1,6 +1,6 @@
 mod game_logic;
 
-use crate::game_logic::game_logic::{Board, GameStatus, PlayerID, Player, has_won};
+use crate::game_logic::game_logic::*;
 
 ////////////////////
 /// Game display ///
@@ -233,6 +233,22 @@ fn ai_should_win_immediately_given_the_opportunity() {
 		_ => ()
 	}
 	assert!(has_won(&b, 1));
+}
+
+pub fn run_game_loop(board: &mut Board, players: &(char, char)) -> GameStatus {
+	let mut current_player: PlayerID = 2;
+
+	loop {
+		match check_win_condition(board, current_player) {
+			GameStatus::InProgress => {
+				current_player = if current_player == 1 { 2 } else { 1 };
+				let player: &Player = if current_player == 1 { &Human(1) } else { &Computer(2) };
+				process_player_turn(board, player);
+				print_board(board, players);
+			},
+			val @ _ => return val,
+		}
+	}
 }
 
 //////////
